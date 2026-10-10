@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roblox Script Copier</title>
+<style>
+  body {
+    background: #1e1e2e;
+    color: white;
+    font-family: Arial, sans-serif;
+    padding: 30px;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: auto;
+  }
+
+  textarea {
+    width: 100%;
+    height: 500px;
+    box-sizing: border-box;
+    background: #11111b;
+    color: #a6e3a1;
+    border: 1px solid #45475a;
+    border-radius: 8px;
+    padding: 15px;
+    font-family: Consolas, monospace;
+    font-size: 14px;
+    resize: vertical;
+  }
+
+  button {
+    margin-top: 12px;
+    padding: 12px 20px;
+    background: #89b4fa;
+    color: #11111b;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  button:hover {
+    background: #b4befe;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>Roblox Lua Script</h2>
+
+  <textarea id="code" spellcheck="false">local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextChatService = game:GetService("TextChatService")
+local GroupService = game:GetService("GroupService")
+
+if RunService:IsServer() then
+	local remote = Instance.new("RemoteEvent")
+	remote.Name = "QuizEvent"
+	remote.Parent = ReplicatedStorage
+
+	local currentAnswer = nil
+	local hostId = game.CreatorId
+
+	if game.CreatorType == Enum.CreatorType.Group then
+		local success, info = pcall(function()
+			return GroupService:GetGroupInfoAsync(game.CreatorId)
+		end)
+		if success and info.Owner then
+			hostId = info.Owner.Id
+		end
+	end
+
+	local function isHost(player)
+		return player.UserId == hostId or RunService:IsStudio()
+	end
+
+	local function clean(text)
+		local result = string.lower(text)
+		result = result:gsub("^%s+", "")
+		result = result:gsub("%s+$", "")
+		return result
+	end
+
+	local function setupPlayer(player)
+		player:SetAttribute("IsHost", isHost(player))
+
+		local clone = script:Clone()
+		clone.RunContext = Enum.RunContext.Client
+		clone.Parent = player:WaitForChild("PlayerGui")
+
+		player.Chatted:Connect(function(message)
+			if currentAnswer == nil or isHost(player) then
+				return
+			end
+			if clean(message) == currentAnswer then
+				currentAnswer = nil
+				remote:FireAllClients("Correct " .. player.Name)
+			end
+		end)
+	end
+
+	remote.OnServerEvent:Connect(function(player, question, answer)
+		if not isHost(player) then
+			return
+		end
+		if typeof(question) ~= "string" or typeof(answer) ~= "string" then
+			return
+		end
+		if question == "" or answer == "" then
+			return
+		end
+		currentAnswer = clean(answer)
+		remote:FireAllClients("Question: " .. question)
+	end)
+
+	Players.PlayerAdded:Connect(setupPlayer)
+	for _, player in ipairs(Players:GetPlayers()) do
+		task.spawn(setupPlayer, player)
+	end
+
+	return
+end
+
+local player = Players.LocalPlayer
+local remote = ReplicatedStorage:WaitForChild("QuizEvent")
+local channel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral")
+
+remote.OnClientEvent:Connect(function(text)
+	channel:DisplaySystemMessage(text)
+end)
+
+if not player:GetAttribute("IsHost") then
+	return
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "QuizAdminPanel"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 320, 0, 230)
+frame.Position = UDim2.new(0, 20, 0.5, -115)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
+
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "Quiz Admin Panel"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.Parent = frame
+
+local function makeBox(placeholder, yPosition)
+	local box = Instance.new("TextBox")
+	box.Size = UDim2.new(1, -30, 0, 40)
+	box.Position = UDim2.new(0, 15, 0, yPosition)
+	box.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+	box.TextColor3 = Color3.new(1, 1, 1)
+	box.PlaceholderText = placeholder
+	box.PlaceholderColor3 = Color3.fromRGB(160, 160, 170)
+	box.Text = ""
+	box.Font = Enum.Font.Gotham
+	box.TextSize = 16
+	box.ClearTextOnFocus = false
+	box.Parent = frame
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+	return box
+end
+
+local questionBox = makeBox("Type the question", 50)
+local answerBox = makeBox("Type the answer", 100)
+
+local sendButton = Instance.new("TextButton")
+sendButton.Size = UDim2.new(1, -30, 0, 45)
+sendButton.Position = UDim2.new(0, 15, 0, 160)
+sendButton.BackgroundColor3 = Color3.fromRGB(60, 170, 90)
+sendButton.TextColor3 = Color3.new(1, 1, 1)
+sendButton.Text = "Send Question"
+sendButton.Font = Enum.Font.GothamBold
+sendButton.TextSize = 18
+sendButton.Parent = frame
+Instance.new("UICorner", sendButton).CornerRadius = UDim.new(0, 8)
+
+sendButton.MouseButton1Click:Connect(function()
+	if questionBox.Text == "" or answerBox.Text == "" then
+		return
+	end
+	remote:FireServer(questionBox.Text, answerBox.Text)
+	questionBox.Text = ""
+	answerBox.Text = ""
+end)
+</textarea>
+
+  <br>
+  <button onclick="copyCode()">Copy Code</button>
+  <span id="status"></span>
+</div>
+
+<script>
+async function copyCode() {
+  const box = document.getElementById("code");
+
+  try {
+    await navigator.clipboard.writeText(box.value);
+  } catch (error) {
+    box.select();
+    document.execCommand("copy");
+  }
+
+  document.getElementById("status").textContent = " Copied!";
+}
+</script>
+</body>
+</html>
